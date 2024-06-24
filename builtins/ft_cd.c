@@ -3,16 +3,21 @@
 /*                                                        :::      ::::::::   */
 /*   ft_cd.c                                            :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: bdany <bdany@student.42.fr>                +#+  +:+       +#+        */
+/*   By: baptiste <baptiste@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/06/13 16:36:08 by bdany             #+#    #+#             */
-/*   Updated: 2024/06/20 12:41:59 by bdany            ###   ########.fr       */
+/*   Updated: 2024/06/21 19:32:50 by baptiste         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../include/minishell.h"
 
 int		ft_pwd(void);
+
+void ft_puterr_endl(char *str)
+{
+	ft_putendl_fd(str, 2);
+}
 
 void	free_tab(char **tab)
 {
@@ -76,16 +81,22 @@ char	*ft_getenv(char *to_find, char **env)
 	return (NULL);
 }
 
-void	ft_env(char **env)
+int	ft_env(char **env)
 {
 	int	i;
 
 	i = 0;
+	if(count_arg(env) > 1)
+	{
+		ft_puterr_endl("bash: env: too many arguments");
+		return (1);
+	}
 	while (env[i])
 	{
 		printf("%s\n", env[i]);
 		i++;
 	}
+	return (0);
 }
 
 int	ft_echo(char **arg)
@@ -97,22 +108,22 @@ int	ft_echo(char **arg)
 	n = 0;
 	if (count_arg(arg) > 1)
 	{
-		while (arg[i] && ft_strcmp(arg[i], "-n" == 0))
+		while (arg[i] && ft_strcmp(arg[i], "-n") == 0)
 		{
 			n = 1;
 			i++;
 		}
-		while (arg[i + 1] && arg[i])
+		while (arg[i] && arg[i + 1])
 		{
-			ft_putstr_fd(arg[i], 1);
+			ft_putstr_fd(arg[i], STDOUT_FILENO);
 			ft_putstr_fd(" ", 1);
 			i++;
 		}
-		if (arg[1])
-			ft_putstr_fd(arg[1], 1);
+		if (arg[i])
+			ft_putstr_fd(arg[i], STDOUT_FILENO);
 	}
 	if (n == 0)
-		ft_putstr_fd("\n", 1);
+		ft_putstr_fd("\n", STDOUT_FILENO);
 	return (0);
 }
 
@@ -166,22 +177,56 @@ char	**ft_unset(char *to_find, char **env_tmp)
 	return (env);
 }
 
-char	**ft_export(char **arg, char **env_tmp)
+size_t ft_strcsnp(const char *s1, const char *c)
 {
-	int	i;
+    int i;
 
-	i = 0;
-	if (count_arg > 1)
-	{
-	}
+    i = 0;
+    while (s1[i] != '\0' && ft_strchr(c, s1[i]) == NULL)
+        i++;
+    return (i);
 }
+
+int print_export(char **env)
+{
+    int i;
+    char *tmp;
+
+    i = 0;
+    tmp = NULL;
+    while (env[i] && ft_strchr(env[i], '=') != 0)
+    {
+        if (env[i][0] > env[i + 1][0]);
+        {
+            tmp = env[i];
+            env[i] = env[i + 1];
+            env[i + 1] = env[i];
+        }
+        ft_putstr_fd(env[i], STDOUT_FILENO);
+        i++;
+    }
+    return (0);
+}
+
+// char	**ft_export(char **arg, char **env)
+// {
+// 	int	i;
+
+// 	i = 0;
+//     if (count_arg == 1)
+//     {
+//         return(print_export(env));
+//     }
+// 	if (count_arg > 1)
+// 	{
+// 	}
+// }
+
 
 int	main(int argc, char **argv, char **env_tmp)
 {
 	char **env;
 
 	env = ft_str_tab_dup(env_tmp);
-	// ft_env(env);
-	env = ft_unset("GDMSESSIO", env);
-	ft_env(env);
+	print_export(env);
 }
