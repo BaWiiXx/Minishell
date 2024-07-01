@@ -6,7 +6,7 @@
 /*   By: bdany <bdany@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/06/13 16:36:08 by bdany             #+#    #+#             */
-/*   Updated: 2024/06/27 11:50:36 by bdany            ###   ########.fr       */
+/*   Updated: 2024/07/01 18:57:33 by bdany            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -110,39 +110,144 @@ int	ft_env(char **env)
 	return (0);
 }
 
-int	ft_echo(char **arg)
+int	is_n_option(char *arg)
 {
 	int	i;
-	int	j;
-	int	n;
 
-	i = 2;
-	j = 0;
-	n = 0;
-	if (count_arg(arg) > 1)
+	i = 0;
+	if (arg && !ft_strncmp(arg, "-n", 2))
 	{
-		if (arg[i] && ft_strcmp(arg[1], "-n") == 0)
-		{
-			while (arg[1] && arg[1][j] == 'n')
-				j++;
-			n = 1;
+		i++;
+		while (arg[i] && arg[i] == 'n')
 			i++;
-		}
-		while (arg[i] && arg[i + 1])
-		{
-			ft_putstr_fd(arg[i], STDOUT_FILENO);
-			ft_putstr_fd(" ", 1);
-			i++;
-		}
-		if (arg[i])
-			ft_putstr_fd(arg[i], STDOUT_FILENO);
+		if (!arg[i])
+			return (1);
 	}
-	if (n == 0)
-		ft_putstr_fd("\n", STDOUT_FILENO);
 	return (0);
 }
 
-int	ft_cd(char **arg, char **env)
+void	print_without_new(char **arg)
+{
+	int	i;
+
+	i = 0;
+	while (arg[i] && arg[i + 1])
+	{
+		ft_putstr_fd(arg[i], 1);
+		ft_putstr_fd(" ", 1);
+		i++;
+	}
+	if (arg[i])
+		ft_putstr_fd(arg[i], 1);
+}
+
+void	print_with_new(char **arg)
+{
+	int	i;
+
+	i = 0;
+	while (arg[i] && arg[i + 1])
+	{
+		ft_putstr_fd(arg[i], 1);
+		ft_putstr_fd(" ", 1);
+		i++;
+	}
+	if (arg[i])
+		ft_putstr_fd(arg[i], 1);
+	ft_putstr_fd("\n", 1);
+}
+
+int	ft_echo(char **arg)
+{
+	int	i;
+
+	i = 1;
+	while (arg[i] && is_n_option(arg[i]))
+		i++;
+	if (i != 1)
+		print_without_new(arg + i);
+	else
+		print_with_new(arg + i);
+	return (0);
+}
+
+char	*troncate_equal(char *str)
+{
+	int	i;
+
+	i = 0;
+	while (str[i] && str[i] != '=')
+		i++;
+	if (str[i])
+	{
+		str[i + 1] = 0;
+		return (str);
+	}
+	return (NULL);
+}
+
+char	*join_with_pwd(char **env, char *str)
+{
+	char	*old_pwd;
+	char	*pwd;
+
+	pwd = ft_getenv("PWD", env);
+	old_pwd = ft_strjoin(str, pwd);
+	free(str);
+	return (old_pwd);
+}
+
+char	**put_pwd_in_old_pwd(char **env)
+{
+	int	i;
+
+	i = 0;
+	while (env[i] && ft_strncmp(env[i], "OLDPWD=", 7))
+		i++;
+	if (env[i])
+	{
+		env[i] = troncate_equal(env[i]);
+		env[i] = join_with_pwd(env, env[i]);
+	}
+	return (env);
+}
+char	*join_with_new_pwd(char *str)
+{
+	char	cwd[1024];
+	char	*new_pwd;
+
+	if (getcwd(cwd, sizeof(cwd)))
+	{
+		new_pwd = ft_strjoin(str, cwd);
+		free(str);
+		return (new_pwd);
+	}
+	return (NULL);
+}
+
+char	**update_pwd(char **env)
+{
+	int	i;
+
+	i = 0;
+	while (env[i] && ft_strncmp(env[i], "PWD=", 4))
+		i++;
+	if (env[i])
+	{
+		env[i] = troncate_equal(env[i]);
+		env[i] = join_with_new_pwd(env[i]);
+	}
+	return (env);
+}
+
+char	**switch_pwd_env(char **env)
+{
+	env = put_pwd_in_old_pwd(env);
+	env = update_pwd(env);
+	return (env);
+}
+
+char	**ft_cd(char **arg, char **env)
 {
 	char	*home;
 
@@ -150,8 +255,8 @@ int	ft_cd(char **arg, char **env)
 	{
 		if (chdir(arg[1]))
 			printf("bash: cd: %s: No such file or directory\n", arg[1]);
-		// 	else
-		// env = switch_pwd_env(env);
+		else
+			env = switch_pwd_env(env);
 	}
 	else if (count_arg(arg) == 1)
 	{
@@ -161,12 +266,12 @@ int	ft_cd(char **arg, char **env)
 		else
 		{
 			chdir(home);
-			// env = switch_pwd_env(env);
+			env = switch_pwd_env(env);
 		}
 	}
 	else
 		printf("bash: cd: too many arguments\n");
-	return (0);
+	return (env);
 }
 
 char	**ft_unset(char *to_find, char **env_tmp)
@@ -258,16 +363,13 @@ void	print_tab_int(int *tab, int size, char **env)
 
 	i = 0;
 	x = 0;
-	while (size)
+	while (i < size)
 	{
-		while (tab[i] != x)
-			i++;
-		print_env_value(env[i]);
-		i = 0;
-		x++;
-		size--;
+		print_env_value(env[tab[i]]);
+		i++;
 	}
 }
+
 int	print_sort_env(char **env)
 {
 	int	*tab;
@@ -289,7 +391,7 @@ int	print_sort_env(char **env)
 				rank++;
 			i++;
 		}
-		tab[j] = rank;
+		tab[rank] = j;
 		j++;
 	}
 	print_tab_int(tab, size, env);
@@ -358,13 +460,13 @@ char	**ft_export(char **arg, char **env)
 
 int	main(int argc, char **argv, char **env_tmp)
 {
-	// char **env;
+	char **env;
 
-	// env = ft_str_tab_dup(env_tmp);
-	// // print_export(env);
-	ft_echo(argv);
+	env = ft_str_tab_dup(env_tmp);
+	// print_sort_env(env);
+	ft_echo(argv + 1);
 	// // 	env = ft_unset(argv[1], env);
-	// ft_cd(argv + 1, env);
-	// ft_env(env);
+	env = ft_cd(argv + 1, env);
+	ft_env(env);
 	// env = ft_export(argv + 1, env);
 }
