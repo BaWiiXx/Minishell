@@ -97,14 +97,10 @@ int	ft_env(char **env)
 	int	i;
 
 	i = 0;
-	// if (count_arg(env) > 1)
-	// {
-	// 	ft_puterr_endl("bash: env: too many arguments");
-	// 	return (1);
-	// }
 	while (env[i])
 	{
-		printf("%s\n", env[i]);
+		if (ft_strchr(env[i], '='))		
+			ft_putendl_fd(env[i], 1);
 		i++;
 	}
 	return (0);
@@ -161,10 +157,10 @@ int	ft_echo(char **arg)
 {
 	int	i;
 
-	i = 1;
+	i = 0;
 	while (arg[i] && is_n_option(arg[i]))
 		i++;
-	if (i != 1)
+	if (i != 0)
 		print_without_new(arg + i);
 	else
 		print_with_new(arg + i);
@@ -251,14 +247,14 @@ char	**ft_cd(char **arg, char **env)
 {
 	char	*home;
 
-	if (count_arg(arg) == 2)
+	if (count_arg(arg) == 1)
 	{
-		if (chdir(arg[1]))
-			printf("bash: cd: %s: No such file or directory\n", arg[1]);
+		if (chdir(arg[0]))
+			printf("minishell: cd: %s: No such file or directory\n", arg[0]);
 		else
 			env = switch_pwd_env(env);
 	}
-	else if (count_arg(arg) == 1)
+	else if (count_arg(arg) == 0)
 	{
 		home = ft_getenv("HOME", env);
 		if (!home)
@@ -274,44 +270,84 @@ char	**ft_cd(char **arg, char **env)
 	return (env);
 }
 
-char	**ft_unset(char *to_find, char **env_tmp)
+char	**erase_env(char **env_tmp, int i)
 {
-	int		i;
-	int		x;
+	int	x;
 	char	**env;
 
-	i = 0;
 	x = 0;
-	if (!ft_getenv(to_find, env_tmp))
-		return (env_tmp);
-	while (env_tmp[i])
-		i++;
-	env = malloc(sizeof(char *) * i);
+	env = malloc(sizeof(char *) * (count_arg(env_tmp)));
 	if (!env)
 		return (NULL);
-	i = 0;
-	while (env_tmp[i])
+	while (env_tmp[x])
 	{
-		if (!ft_strnstr(env_tmp[i], to_find, ft_strlen(to_find)))
-		{
-			env[x] = ft_strdup(env_tmp[i]);
-			x++;
-		}
-		i++;
+		if (x == i)
+			env_tmp++;
+		env[x] = ft_strdup(env_tmp[x]);
+		if (!env[x])
+			return (NULL);
+		x++;
 	}
+	env[x] = NULL;
 	free_tab(env_tmp);
 	return (env);
 }
 
-size_t	ft_strcsnp(const char *s1, const char *c)
+int search_arg_in_env(char *str, char *env);
+
+char	**try_to_unset(char *str, char **env)
 {
 	int	i;
 
 	i = 0;
-	while (s1[i] != '\0' && ft_strchr(c, s1[i]) == NULL)
+	while (env[i] && search_arg_in_env(str, env[i]))
 		i++;
-	return (i);
+	if (env[i])
+		env = erase_env(env, i);
+	return (env);
 }
+
+char	**ft_unset(char **arg, char **env)
+{
+	int	i;
+
+	i = 0;
+	while (env && arg[i])
+	{
+		env = try_to_unset(arg[i], env);
+		i++;
+	}
+	return (env);
+}
+
+// char	**ft_unset(char *to_find, char **env_tmp)
+// {
+// 	int		i;
+// 	int		x;
+// 	char	**env;
+
+// 	i = 0;
+// 	x = 0;
+// 	if (!ft_getenv(to_find, env_tmp))
+// 		return (env_tmp);
+// 	while (env_tmp[i])
+// 		i++;
+// 	env = malloc(sizeof(char *) * i);
+// 	if (!env)
+// 		return (NULL);
+// 	i = 0;
+// 	while (env_tmp[i])
+// 	{
+// 		if (!ft_strnstr(env_tmp[i], to_find, ft_strlen(to_find)))
+// 		{
+// 			env[x] = ft_strdup(env_tmp[i]);
+// 			x++;
+// 		}
+// 		i++;
+// 	}
+// 	free_tab(env_tmp);
+// 	return (env);
+// }
 
 int	cmp_env(char *s1, char *s2)
 {
@@ -399,15 +435,101 @@ int	print_sort_env(char **env)
 	return (0);
 }
 
-char	**realloc_env(char **env_tmp, int size)
+int ft_strchr_env(char *str, int c)
 {
-	int		size_env;
+	int i;
+
+	i = 0;
+	if (!str)
+		return(0);
+	while (str[i] && str[i] != c)
+		i++;
+	return (i);
+}
+
+int	error_arg_export(char *str, int *exit_status)
+{
+	ft_putstr_fd("minishell: export: `", 2);
+	ft_putstr_fd(str, 2);
+	ft_putstr_fd("': not a valid identifier\n", 2);
+	*exit_status = 1;
+	return (1);
+}
+
+int check_argument_export(char *str, int *exit_status)
+{
+	int i;
+
+	i = 1;
+	if (!ft_isalpha(str[0]) && str[0] != '_')
+		return (error_arg_export(str, exit_status));
+	while (str[i] && str[i] != '=' && str[i] != '+')
+	{
+		if (!ft_isalnum(str[i]) && str[i] != '_')
+			return (error_arg_export(str, exit_status));
+		i++;
+	}
+	if (str[i] == '+' && str[i + 1] != '=')
+		return (error_arg_export(str, exit_status));
+	return (0);
+}
+
+int search_arg_in_env(char *str, char *env)
+{
+	int i;
+
+	i = 0;
+	while (str[i] && str[i] != '=' && str[i] != '+' && env[i] && env[i] != '=')
+	{
+		if (str[i] != env[i])
+			return (1);
+		i++;
+	}
+	if ((!str[i] || str[i] == '=' || str[i] == '+') && (!env[i] || env[i] == '='))
+		return (0);
+	return (1);
+
+}
+
+char *replace(char *str, char *env)
+{
+	free(env);
+	env = ft_strdup(str);
+	return (env);
+}
+
+char	*join_arg(char *str, char *env)
+{
+	char *new_env;
+
+	new_env = ft_strjoin(env, str);
+	free(env);
+	return (new_env);
+}
+
+char *replace_with_arg(char *str, char *env)
+{
+	int i;
+
+	i = 0;
+	while (str[i] && str[i] != '+' && str[i] != '=')
+		i++;
+	if (!str[i])
+		return (env);
+	if (str[i] == '=')
+		env = replace(str, env);
+	if (str[i] == '+')
+		env= join_arg(str + i + 2, env);
+	return(env);
+}
+
+char	**realloc_and_copy_env(char **env_tmp, int size)
+{
 	char	**env;
 	int		i;
 
 	i = 0;
-	size_env = count_arg(env_tmp);
-	env = malloc(sizeof(char *) * (size + size_env + 1));
+	env = malloc(sizeof(char *) * (size + 1));
 	if (!env)
 		return (NULL);
 	while (env_tmp[i])
@@ -416,57 +538,118 @@ char	**realloc_env(char **env_tmp, int size)
 		i++;
 	}
 	env[i] = NULL;
+	free_tab(env_tmp);
 	return (env);
 }
 
-// int	add_arg_to_env(char *str, char **env)
-// {
-// }
-
-char	**add_env_variable(char **arg, char **env_tmp)
+char	*create_without_plus(char *str)
 {
-	int		size;
-	int		i;
-	char	**env;
+	char *env;
+	int i;
 
-	size = count_arg(arg);
 	i = 0;
-	env = realloc_env(env_tmp, size);
-	free_tab(env_tmp);
-	while (arg[i])
+	env = malloc(sizeof(char) * ft_strlen(str));
+	if (!env)
+		return (NULL);
+	while (str[i])
 	{
-		// add_arg_to_env(arg[i], env);
+		if (str[i] == '+')
+			str++;
+		env[i] = str[i];
 		i++;
 	}
-	return (NULL);
+	env[i] = 0;
+	return (env);
 }
 
-char	**ft_export(char **arg, char **env)
+char **create_arg(char *str, char **env_tmp)
 {
-	// if (arg[0] == '_' && arg[1] == '\0')
-	// return (0);
-	if (count_arg(arg) == 1)
+	int	i;
+	char **env;
+	int		size_env;
+
+	size_env = count_arg(env_tmp);
+	env = realloc_and_copy_env(env_tmp, size_env + 1);
+	i = 0;
+	while (str[i] && str[i] != '+' && str[i] != '=')
+		i++;
+	if (!str[i] || str[i] == '=')
+		env[size_env] = ft_strdup(str);
+	else
+		env[size_env] = create_without_plus(str);
+	env[size_env + 1] = NULL;
+	return (env);
+}
+
+char	**add_arg_to_env(char *str, char **env, int *exit_status)
+{
+	int i;
+
+	i = 0;
+	if (check_argument_export(str, exit_status))
+		return (env);
+	while (env[i] && search_arg_in_env(str, env[i]))
+		i++;
+	if (env[i])
+		env[i] = replace_with_arg(str, env[i]);
+	else
+		env = create_arg(str, env);
+	return (env);
+}
+
+char	**add_env_variable(char **arg, char **env, int *exit_status)
+{
+	int		i;
+
+	i = 0;
+	while (arg[i])
+	{
+		env = add_arg_to_env(arg[i], env, exit_status);
+		i++;
+	}
+	return (env);
+}
+
+char	**ft_export(char **arg, char **env, int *exit_status)
+{
+	if (count_arg(arg) == 0)
 	{
 		print_sort_env(env);
 	}
-	if (count_arg(arg) > 1)
+	if (count_arg(arg) > 0)
 	{
-		// if (arg[0] == '_' && arg[1] == '\0')
-		// 	return (0);
-		env = add_env_variable(arg + 1, env);
+		env = add_env_variable(arg, env, exit_status);
 	}
-	return (NULL);
+	return (env);
+}
+
+char	**check_builtins(char **arg, char **env, int *exit_status)
+{
+	if (!strcmp(arg[0], "echo"))
+		ft_echo(arg + 1);
+	else if (!strcmp(arg[0], "cd"))
+		env = ft_cd(arg + 1, env);
+	else if (!strcmp(arg[0], "pwd"))
+		ft_pwd();
+	else if (!strcmp(arg[0], "export"))
+		env = ft_export(arg + 1, env, exit_status);
+	else if (!strcmp(arg[0], "unset"))
+		env = ft_unset(arg + 1, env);
+	else if (!strcmp(arg[0], "env"))
+		ft_env(env);
+	else if (!strcmp(arg[0], "exit"))
+		;
+	return (env);
 }
 
 int	main(int argc, char **argv, char **env_tmp)
 {
 	char **env;
+	int	exit_status = 0;
+	int i = 0;
 
 	env = ft_str_tab_dup(env_tmp);
-	// print_sort_env(env);
-	ft_echo(argv + 1);
-	// // 	env = ft_unset(argv[1], env);
-	env = ft_cd(argv + 1, env);
-	ft_env(env);
-	// env = ft_export(argv + 1, env);
+	env = check_builtins(argv + 1, env, &exit_status);
+	printf("exit; %d\n", exit_status);
+	free_tab(env);
 }
